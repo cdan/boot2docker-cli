@@ -69,9 +69,14 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return nil, err
 	}
 
+	vcConn := NewVcConn(&cfg)
+	err = vcConn.Login()
+	if err != nil {
+		return nil, err
+	}
+
 	args := []string{"vm.info"}
-	args = append(args, fmt.Sprintf("--u=%s@%s", cfg.VcenterUser, cfg.VcenterIp))
-	args = append(args, "--k=true")
+	args = vcConn.AppendConnectionString(args)
 	args = append(args, fmt.Sprintf("--dc=%s", cfg.VcenterDC))
 	args = append(args, mc.VM)
 
@@ -152,7 +157,7 @@ func (m *Machine) Refresh() error {
 // Start starts the machine.
 func (m *Machine) Start() error {
 	args := []string{"vm.power"}
-	m.appendConnectionString(args)
+	NewVcConn(&cfg).AppendConnectionString(args)
 	args = append(args, "-on")
 	args = append(args, m.Name)
 
@@ -282,15 +287,9 @@ func (m *Machine) AttachStorage(ctlName string, medium driver.StorageMedium) err
 	return nil
 }
 
-func (m *Machine) appendConnectionString(args []string) []string {
-	args = append(args, fmt.Sprintf("--u=", m.VcenterUser, "@", m.VcenterIp))
-	args = append(args, "--k=true")
-	return args
-}
-
 func (m *Machine) fetchIp() (string, string, error) {
 	args := []string{"vm.ip"}
-	m.appendConnectionString(args)
+	NewVcConn(&cfg).AppendConnectionString(args)
 	args = append(args, m.Name)
 	return govcOutErr(args...)
 }
