@@ -79,35 +79,22 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return nil, err
 	}
 
-	args := []string{"vm.info"}
-	args = vcConn.AppendConnectionString(args)
-	args = append(args, fmt.Sprintf("--dc=%s", cfg.VcenterDC))
-	args = append(args, mc.VM)
-
-	m := &Machine{Name: mc.VM, State: driver.Poweroff}
-	stdout, _, err := govcOutErr(args...)
+	stdout, err := vcConn.VmInfo(mc.VM)
 	if err != nil {
-		fmt.Println("errors! %s", err)
 		return nil, err
 	}
-	if strings.Contains(stdout, "Name") {
-		currentCpu := strings.Trim(strings.Split(strings.Split(stdout, "CPU:")[1], "vCPU")[0], " ")
-		if cpus, err := strconv.ParseUint(currentCpu, 10, 32); err == nil {
-			m.CPUs = uint(cpus)
-		}
-		currentMem := strings.Trim(strings.Split(strings.Split(stdout, "Memory:")[1], "MB")[0], " ")
-		if mem, err := strconv.ParseUint(currentMem, 10, 32); err == nil {
-			m.Memory = uint(mem)
-		}
-		if strings.Contains(stdout, "poweredOn") {
-			m.State = driver.Running
-			m.VmIp = strings.Trim(strings.Split(stdout, "IP address:")[1], " ")
-		}
-		m.VcenterIp, _ = mc.DriverCfg["VcenterIp"].(string)
-		m.VcenterUser, _ = mc.DriverCfg["VcenterUser"].(string)
-		return m, nil
+
+	m := &Machine{
+		Name:        mc.VM,
+		State:       driver.Poweroff,
+		SshPubKey:   mc.SSHKey + ".pub",
+		VcenterIp:   cfg.VcenterIp,
+		VcenterUser: cfg.VcenterUser,
 	}
-	return nil, errors.NewVmNotFoundError()
+
+	ParseVmProperty(stdout, m)
+
+	return m, nil
 }
 
 // create a new machine in vsphere includes the following steps:
@@ -153,8 +140,24 @@ func CreateMachine(mc *driver.MachineConfig) (*Machine, error) {
 		Datastore:   cfg.VcenterDS,
 		Datacenter:  cfg.VcenterDC,
 		Network:     cfg.VcenterNet,
+		SshPubKey:   mc.SSHKey + ".pub",
 	}
 	return m, nil
+}
+
+func ParseVmProperty(stdout string, m *Machine) {
+	currentCpu := strings.Trim(strings.Split(strings.Split(stdout, "CPU:")[1], "vCPU")[0], " ")
+	if cpus, err := strconv.ParseUint(currentCpu, 10, 32); err == nil {
+		m.CPUs = uint(cpus)
+	}
+	currentMem := strings.Trim(strings.Split(strings.Split(stdout, "Memory:")[1], "MB")[0], " ")
+	if mem, err := strconv.ParseUint(currentMem, 10, 32); err == nil {
+		m.Memory = uint(mem)
+	}
+	if strings.Contains(stdout, "poweredOn") {
+		m.State = driver.Running
+		m.VmIp = strings.Trim(strings.Split(stdout, "IP address:")[1], " ")
+	}
 }
 
 func GetDriverCfg(mc *driver.MachineConfig) error {
@@ -225,29 +228,54 @@ type Machine struct {
 	Datacenter  string // the datacenter the machine locates
 	Network     string // the network the machine is using
 	VmIp        string // the Ip address of the machine
+	SshPubKey   string // pass SSH here so the vm knows the source of authorized_keys
 }
 
 // Refresh reloads the machine information.
 func (m *Machine) Refresh() error {
-	fmt.Printf("Refresh %s: %s\n", m.Name, m.State)
+	vcConn := NewVcConn(&cfg)
+	stdout, err := vcConn.VmInfo(m.Name)
+	if err != nil {
+		return err
+	}
+	ParseVmProperty(stdout, m)
 	return nil
 }
 
 // Start starts the machine.
+// for vSphere driver, the start process includes the following changes
+// 1. start the docker virtual machine;
+// 2. fetch the ip address from the virtual machine (with open-vmtools);
+// 3. upload the ssh key to the virtual machine;
 func (m *Machine) Start() error {
-	args := []string{"vm.power"}
-	NewVcConn(&cfg).AppendConnectionString(args)
-	args = append(args, "-on")
-	args = append(args, m.Name)
-
-	if err := govc(args...); err != nil {
-		return err
+	switch m.State {
+	case driver.Running:
+		msg := fmt.Sprintf("VM %s has already been started", m.Name)
+		fmt.Println(msg)
+		return nil
+	case driver.Poweroff:
+		// TODO add transactional or error handling in the following steps
+		vcConn := NewVcConn(&cfg)
+		err := vcConn.VmPowerOn(m.Name)
+		if err != nil {
+			return err
+		}
+		// this step waits for the vm to start and fetch its ip address;
+		// this guarantees that the opem-vmtools has started working...
+		_, err = vcConn.VmFetchIp(m.Name)
+		if err != nil {
+			return err
+		}
+		err = vcConn.GuestMkdir("docker", "tcuser", m.Name, "/home/docker/.ssh")
+		if err != nil {
+			return err
+		}
+		err = vcConn.GuestUpload("docker", "tcuser", m.Name, m.SshPubKey,
+			"/home/docker/.ssh/authorized_keys")
+		if err != nil {
+			return err
+		}
 	}
-
-	if ip, _, err := m.fetchIp(); ip == "" && err != nil {
-		return err
-	}
-	fmt.Printf("Start %s: %s\n", m.Name, m.State)
 	return nil
 }
 
@@ -265,18 +293,27 @@ func (m *Machine) Pause() error {
 	return nil
 }
 
-// Stop gracefully stops the machine.
+// Currently make stop equivalent to poweroff as there is no shutdown guestOS API
+// yet with current open-vmtools and govc
 func (m *Machine) Stop() error {
+	vcConn := NewVcConn(&cfg)
+	err := vcConn.VmPowerOff(m.Name)
+	if err != nil {
+		return err
+	}
 	m.State = driver.Poweroff
-	fmt.Printf("Stop %s: %s\n", m.Name, m.State)
-	return nil
+	return err
 }
 
 // Poweroff forcefully stops the machine. State is lost and might corrupt the disk image.
 func (m *Machine) Poweroff() error {
+	vcConn := NewVcConn(&cfg)
+	err := vcConn.VmPowerOff(m.Name)
+	if err != nil {
+		return err
+	}
 	m.State = driver.Poweroff
-	fmt.Printf("Poweroff %s: %s\n", m.Name, m.State)
-	return nil
+	return err
 }
 
 // Restart gracefully restarts the machine.
@@ -364,11 +401,4 @@ func (m *Machine) DelStorageCtl(name string) error {
 func (m *Machine) AttachStorage(ctlName string, medium driver.StorageMedium) error {
 	fmt.Println("Attach storage")
 	return nil
-}
-
-func (m *Machine) fetchIp() (string, string, error) {
-	args := []string{"vm.ip"}
-	NewVcConn(&cfg).AppendConnectionString(args)
-	args = append(args, m.Name)
-	return govcOutErr(args...)
 }

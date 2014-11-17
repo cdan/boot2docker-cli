@@ -55,7 +55,7 @@ func (conn VcConn) DatastoreMkdir(dirName string) error {
 		return nil
 	}
 
-	msg := fmt.Sprintf("Creating directory %s on datastore %s of vCenter %s...",
+	msg := fmt.Sprintf("Creating directory %s on datastore %s of vCenter %s... ",
 		dirName, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
 	fmt.Print(msg)
 	args := []string{"datastore.mkdir"}
@@ -75,11 +75,11 @@ func (conn VcConn) DatastoreMkdir(dirName string) error {
 func (conn VcConn) DatastoreUpload(localPath string) error {
 	stdout, err := conn.DatastoreLs(DATASTORE_DIR)
 	if err == nil && strings.Contains(stdout, DATASTORE_ISO_NAME) {
-		fmt.Println("boot2docker ISO already uploaded, skipping upload...")
+		fmt.Println("boot2docker ISO already uploaded, skipping upload... ")
 		return nil
 	}
 
-	msg := fmt.Sprintf("Uploading %s to %s on datastore %s of vCenter %s...",
+	msg := fmt.Sprintf("Uploading %s to %s on datastore %s of vCenter %s... ",
 		localPath, DATASTORE_DIR, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
 	fmt.Print(msg)
 
@@ -99,6 +99,20 @@ func (conn VcConn) DatastoreUpload(localPath string) error {
 	}
 }
 
+func (conn VcConn) VmInfo(vmName string) (string, error) {
+	args := []string{"vm.info"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--dc=%s", conn.cfg.VcenterDC))
+	args = append(args, vmName)
+
+	stdout, stderr, err := govcOutErr(args...)
+	if stderr == "" && err == nil {
+		return stdout, nil
+	} else {
+		return "", errors.NewVmError("info", vmName, stderr)
+	}
+}
+
 func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	args := []string{"vm.create"}
 	args = conn.AppendConnectionString(args)
@@ -111,7 +125,7 @@ func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Creating virtual machine %s of vCenter %s...",
+	msg := fmt.Sprintf("Creating virtual machine %s of vCenter %s... ",
 		vmName, conn.cfg.VcenterIp)
 	fmt.Print(msg)
 	if stderr == "" && err == nil {
@@ -120,6 +134,95 @@ func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	} else {
 		fmt.Println("failed!")
 		return errors.NewVmError("create", vmName, stderr)
+	}
+}
+
+func (conn VcConn) VmPowerOn(vmName string) error {
+	args := []string{"vm.power"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, "-on")
+	args = append(args, vmName)
+	_, stderr, err := govcOutErr(args...)
+
+	msg := fmt.Sprintf("Powering on virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewVmError("power on", vmName, stderr)
+	}
+}
+
+func (conn VcConn) VmPowerOff(vmName string) error {
+	args := []string{"vm.power"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, "-off")
+	args = append(args, vmName)
+	_, stderr, err := govcOutErr(args...)
+
+	msg := fmt.Sprintf("Powering off virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewVmError("power on", vmName, stderr)
+	}
+}
+
+func (conn VcConn) VmFetchIp(vmName string) (string, error) {
+	args := []string{"vm.ip"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, vmName)
+	stdout, stderr, err := govcOutErr(args...)
+
+	msg := fmt.Sprintf("Fetching IP on virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return stdout, nil
+	} else {
+		fmt.Println("failed!")
+		return "", errors.NewVmError("fetching IP", vmName, stderr)
+	}
+}
+
+func (conn VcConn) GuestMkdir(guestUser, guestPass, vmName, dirName string) error {
+	args := []string{"guest.mkdir"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--l=%s:%s", guestUser, guestPass))
+	args = append(args, fmt.Sprintf("--vm=%s", vmName))
+	args = append(args, "-p")
+	args = append(args, dirName)
+	_, stderr, err := govcOutErr(args...)
+
+	if stderr == "" && err == nil {
+		return nil
+	} else {
+		return errors.NewGuestError("mkdir", vmName, stderr)
+	}
+}
+
+func (conn VcConn) GuestUpload(guestUser, guestPass, vmName, localPath, remotePath string) error {
+	args := []string{"guest.upload"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--l=%s:%s", guestUser, guestPass))
+	args = append(args, fmt.Sprintf("--vm=%s", vmName))
+	args = append(args, "-f")
+	args = append(args, localPath)
+	args = append(args, remotePath)
+	_, stderr, err := govcOutErr(args...)
+
+	if stderr == "" && err == nil {
+		return nil
+	} else {
+		return errors.NewGuestError("upload", vmName, stderr)
 	}
 }
 
