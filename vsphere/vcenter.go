@@ -26,7 +26,6 @@ func (conn VcConn) Login() error {
 		return nil
 	}
 
-	// need to login here
 	conn.password, err = gopass.GetPass("Enter vCenter Password: ")
 	if err != nil {
 		return err
@@ -36,6 +35,92 @@ func (conn VcConn) Login() error {
 		return nil
 	}
 	return err
+}
+
+func (conn VcConn) DatastoreLs(path string) (string, error) {
+	args := []string{"datastore.ls"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
+	args = append(args, path)
+	stdout, stderr, err := govcOutErr(args...)
+	if stderr == "" && err == nil {
+		return stdout, nil
+	}
+	return "", errors.NewDatastoreError(conn.cfg.VcenterDC, "ls", stderr)
+}
+
+func (conn VcConn) DatastoreMkdir(dirName string) error {
+	_, err := conn.DatastoreLs(dirName)
+	if err == nil {
+		return nil
+	}
+
+	msg := fmt.Sprintf("Creating directory %s on datastore %s of vCenter %s...",
+		dirName, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	args := []string{"datastore.mkdir"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
+	args = append(args, dirName)
+	_, stderr, err := govcOutErr(args...)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewDatastoreError(conn.cfg.VcenterDS, "mkdir", stderr)
+	}
+}
+
+func (conn VcConn) DatastoreUpload(localPath string) error {
+	stdout, err := conn.DatastoreLs(DATASTORE_DIR)
+	if err == nil && strings.Contains(stdout, DATASTORE_ISO_NAME) {
+		fmt.Println("boot2docker ISO already uploaded, skipping upload...")
+		return nil
+	}
+
+	msg := fmt.Sprintf("Uploading %s to %s on datastore %s of vCenter %s...",
+		localPath, DATASTORE_DIR, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+
+	dsPath := fmt.Sprintf("%s/%s", DATASTORE_DIR, DATASTORE_ISO_NAME)
+	args := []string{"datastore.upload"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
+	args = append(args, localPath)
+	args = append(args, dsPath)
+	_, stderr, err := govcOutErr(args...)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewDatastoreError(conn.cfg.VcenterDC, "upload", stderr)
+	}
+}
+
+func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
+	args := []string{"vm.create"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--net=%s", conn.cfg.VcenterNet))
+	args = append(args, fmt.Sprintf("--dc=%s", conn.cfg.VcenterDC))
+	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
+	args = append(args, fmt.Sprintf("--iso=%s", isoPath))
+	args = append(args, fmt.Sprintf("--m=%s", memory))
+	args = append(args, "--on=false")
+	args = append(args, vmName)
+	_, stderr, err := govcOutErr(args...)
+
+	msg := fmt.Sprintf("Creating virtual machine %s of vCenter %s...",
+		vmName, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewVmError("create", vmName, stderr)
+	}
 }
 
 func (conn VcConn) AppendConnectionString(args []string) []string {

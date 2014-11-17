@@ -18,14 +18,18 @@ type DriverCfg struct {
 	VcenterDC   string // target vCenter Datacenter
 	VcenterDS   string // target vCenter Datastore
 	VcenterNet  string // vCenter VM Network
+	Cpu         string // CPU number of the virtual machine
 }
 
 var (
 	verbose bool // Verbose mode (Local copy of B2D.Verbose).
 	cfg     DriverCfg
+)
 
-	// TODO make all these below errors a class
-	ErrVmIpNotFound = errors.New("VM IP Address not found")
+const (
+	DATASTORE_DIR      = "boot2docker-iso"
+	DATASTORE_ISO_NAME = "boot2docker.iso"
+	DEFAULT_CPU_NUMBER = 2
 )
 
 func init() {
@@ -44,9 +48,9 @@ func InitFunc(mc *driver.MachineConfig) (driver.Machine, error) {
 	verbose = mc.Verbose
 
 	m, err := GetMachine(mc)
-	//if err != nil && mc.Init == true {
-	//return CreateMachine(mc)
-	//}
+	if err != nil && mc.Init == true {
+		return CreateMachine(mc)
+	}
 	return m, err
 }
 
@@ -88,12 +92,12 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 	}
 	if strings.Contains(stdout, "Name") {
 		currentCpu := strings.Trim(strings.Split(strings.Split(stdout, "CPU:")[1], "vCPU")[0], " ")
-		if cpus, err := strconv.Atoi(currentCpu); err == nil {
-			m.CPUs = cpus
+		if cpus, err := strconv.ParseUint(currentCpu, 10, 32); err == nil {
+			m.CPUs = uint(cpus)
 		}
 		currentMem := strings.Trim(strings.Split(strings.Split(stdout, "Memory:")[1], "MB")[0], " ")
-		if mem, err := strconv.Atoi(currentMem); err == nil {
-			m.Memory = mem
+		if mem, err := strconv.ParseUint(currentMem, 10, 32); err == nil {
+			m.Memory = uint(mem)
 		}
 		if strings.Contains(stdout, "poweredOn") {
 			m.State = driver.Running
@@ -104,6 +108,53 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return m, nil
 	}
 	return nil, errors.NewVmNotFoundError()
+}
+
+// create a new machine in vsphere includes the following steps:
+// 1. create a directory in vsphere datastore to include the B2D ISO;
+// 2. uploads the ISO to the corresponding datastore;
+// 3. bootup the virtual machine with the ISO mounted;
+func CreateMachine(mc *driver.MachineConfig) (*Machine, error) {
+	err := GetDriverCfg(mc)
+	if err != nil {
+		return nil, err
+	}
+
+	vcConn := NewVcConn(&cfg)
+	err = vcConn.DatastoreMkdir(DATASTORE_DIR)
+	if err != nil {
+		return nil, err
+	}
+
+	err = vcConn.DatastoreUpload(mc.ISO)
+	if err != nil {
+		return nil, err
+	}
+
+	memory := strconv.Itoa(int(mc.Memory))
+	isoPath := fmt.Sprintf("%s/%s", DATASTORE_DIR, DATASTORE_ISO_NAME)
+	err = vcConn.VmCreate(isoPath, memory, mc.VM)
+	if err != nil {
+		return nil, err
+	}
+
+	cpu, err := strconv.ParseUint(cfg.Cpu, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m := &Machine{
+		Name:        mc.VM,
+		State:       driver.Poweroff,
+		CPUs:        uint(cpu),
+		Memory:      mc.Memory,
+		VcenterIp:   cfg.VcenterIp,
+		VcenterUser: cfg.VcenterUser,
+		Datastore:   cfg.VcenterDS,
+		Datacenter:  cfg.VcenterDC,
+		Network:     cfg.VcenterNet,
+	}
+	return m, nil
 }
 
 func GetDriverCfg(mc *driver.MachineConfig) error {
@@ -123,13 +174,41 @@ func GetDriverCfg(mc *driver.MachineConfig) error {
 	} else {
 		cfg.VcenterUser = vcenterUser.(string)
 	}
-	vcenterDC := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterDC"]
+	vcenterDC := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterDatacenter"]
 	if vcenterDC == nil {
 		if cfg.VcenterDC == "" {
 			return errors.NewIncompleteVcConfigError("vCenter Datacenter")
 		}
 	} else {
 		cfg.VcenterDC = vcenterDC.(string)
+	}
+	vcenterDS := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterDatastore"]
+	if vcenterDS == nil {
+		if cfg.VcenterDS == "" {
+			return errors.NewIncompleteVcConfigError("vCenter Datastore")
+		}
+	} else {
+		cfg.VcenterDS = vcenterDS.(string)
+	}
+	vcenterNet := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterNetwork"]
+	if vcenterNet == nil {
+		if cfg.VcenterNet == "" {
+			return errors.NewIncompleteVcConfigError("vCenter Network")
+		}
+	} else {
+		cfg.VcenterNet = vcenterNet.(string)
+	}
+	cpu := mc.DriverCfg["vsphere"].(map[string]interface{})["VmCPU"]
+	if cpu == nil {
+		if cfg.Cpu == "" {
+			cfg.Cpu = strconv.Itoa(DEFAULT_CPU_NUMBER)
+		}
+	} else {
+		cfg.Cpu = cpu.(string)
+		_, err := strconv.Atoi(cfg.Cpu)
+		if err != nil {
+			return errors.NewIncompleteVcConfigError("VmCPU")
+		}
 	}
 	return nil
 }
@@ -138,8 +217,8 @@ func GetDriverCfg(mc *driver.MachineConfig) error {
 type Machine struct {
 	Name        string
 	State       driver.MachineState
-	CPUs        int
-	Memory      int
+	CPUs        uint
+	Memory      uint
 	VcenterIp   string // the vcenter the machine belongs to
 	VcenterUser string // the vcenter user/admin to own the machine
 	Datastore   string // the datastore for the ISO file
