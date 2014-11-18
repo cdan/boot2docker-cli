@@ -12,13 +12,15 @@ import (
 )
 
 type DriverCfg struct {
-	Govc        string // Path to govc binary
-	VcenterIp   string // vCenter URL
-	VcenterUser string // vCenter User
-	VcenterDC   string // target vCenter Datacenter
-	VcenterDS   string // target vCenter Datastore
-	VcenterNet  string // vCenter VM Network
-	Cpu         string // CPU number of the virtual machine
+	Govc          string // Path to govc binary
+	VcenterIp     string // vCenter URL
+	VcenterUser   string // vCenter User
+	VcenterDC     string // target vCenter Datacenter
+	VcenterDS     string // target vCenter Datastore
+	VcenterNet    string // vCenter VM Network
+	VcenterPool   string // target vCenter Resource Pool
+	VcenterHostIp string // target vCenter Host Ip
+	Cpu           string // CPU number of the virtual machine
 }
 
 var (
@@ -56,12 +58,14 @@ func InitFunc(mc *driver.MachineConfig) (driver.Machine, error) {
 
 // Add cmdline params for this driver
 func ConfigFlags(B2D *driver.MachineConfig, flags *flag.FlagSet) error {
-	flags.StringVar(&cfg.Govc, "govc", "govc", "path to govc binary")
+	flags.StringVar(&cfg.Govc, "govc", "govc", "Path to GOVC Binary")
 	flags.StringVar(&cfg.VcenterIp, "vcenter-ip", "", "vCenter URL")
 	flags.StringVar(&cfg.VcenterUser, "vcenter-user", "", "vCenter User")
 	flags.StringVar(&cfg.VcenterDC, "vcenter-datacenter", "", "vCenter Datacenter")
 	flags.StringVar(&cfg.VcenterDS, "vcenter-datastore", "", "vCenter Datastore")
-	flags.StringVar(&cfg.VcenterNet, "vcenter-vm-network", "", "vCenter VM network")
+	flags.StringVar(&cfg.VcenterNet, "vcenter-vm-network", "", "vCenter VM Network")
+	flags.StringVar(&cfg.VcenterPool, "vcenter-pool", "", "vCenter Target Resource Pool")
+	flags.StringVar(&cfg.VcenterHostIp, "vcenter-host-ip", "", "vCenter Target Host IP")
 
 	return nil
 }
@@ -222,6 +226,16 @@ func GetDriverCfg(mc *driver.MachineConfig) error {
 		if err != nil {
 			return errors.NewIncompleteVcConfigError("VmCPU")
 		}
+	}
+
+	// vcenter resource pool and host ip are nullable configurations
+	pool := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterPool"]
+	if pool != nil {
+		cfg.VcenterPool = pool.(string)
+	}
+	hostIp := mc.DriverCfg["vsphere"].(map[string]interface{})["VcenterHostIp"]
+	if hostIp != nil {
+		cfg.VcenterHostIp = hostIp.(string)
 	}
 	return nil
 }

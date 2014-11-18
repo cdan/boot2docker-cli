@@ -125,6 +125,12 @@ func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	args = append(args, fmt.Sprintf("--iso=%s", isoPath))
 	args = append(args, fmt.Sprintf("--m=%s", memory))
 	args = append(args, "--on=false")
+	if conn.cfg.VcenterPool != "" {
+		args = append(args, fmt.Sprintf("--pool=%s", conn.cfg.VcenterPool))
+	}
+	if conn.cfg.VcenterHostIp != "" {
+		args = append(args, fmt.Sprintf("--host.ip=%s", conn.cfg.VcenterHostIp))
+	}
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
