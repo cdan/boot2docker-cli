@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/gopass"
 	"github.com/boot2docker/boot2docker-cli/vsphere/errors"
+	"github.com/howeyc/gopass"
 )
 
 type VcConn struct {
@@ -27,10 +27,10 @@ func (conn VcConn) Login() error {
 		return nil
 	}
 
-	conn.password, err = gopass.GetPass("Enter vCenter Password: ")
-	if err != nil {
-		return err
-	}
+	fmt.Fprintf(os.Stdout, "Enter vCenter Password: ")
+	password := gopass.GetPasswd()
+	conn.password = string(password[:])
+
 	err = conn.queryAboutInfo()
 	if err == nil {
 		return nil
