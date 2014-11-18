@@ -73,6 +73,10 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return nil, err
 	}
 
+	if mc.Init == false {
+		fmt.Fprintf(os.Stdout, "Connecting to vSphere environment %s...\n", cfg.VcenterIp)
+	}
+
 	vcConn := NewVcConn(&cfg)
 	err = vcConn.Login()
 	if err != nil {

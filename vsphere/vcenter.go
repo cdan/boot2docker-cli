@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"code.google.com/p/gopass"
@@ -55,19 +56,19 @@ func (conn VcConn) DatastoreMkdir(dirName string) error {
 		return nil
 	}
 
-	msg := fmt.Sprintf("Creating directory %s on datastore %s of vCenter %s... ",
+	fmt.Fprintf(os.Stdout, "Creating directory %s on datastore %s of vCenter %s... ",
 		dirName, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
-	fmt.Print(msg)
+
 	args := []string{"datastore.mkdir"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
 	args = append(args, dirName)
 	_, stderr, err := govcOutErr(args...)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return errors.NewDatastoreError(conn.cfg.VcenterDS, "mkdir", stderr)
 	}
 }
@@ -75,13 +76,12 @@ func (conn VcConn) DatastoreMkdir(dirName string) error {
 func (conn VcConn) DatastoreUpload(localPath string) error {
 	stdout, err := conn.DatastoreLs(DATASTORE_DIR)
 	if err == nil && strings.Contains(stdout, DATASTORE_ISO_NAME) {
-		fmt.Println("boot2docker ISO already uploaded, skipping upload... ")
+		fmt.Fprintf(os.Stdout, "boot2docker ISO already uploaded, skipping upload... \n")
 		return nil
 	}
 
-	msg := fmt.Sprintf("Uploading %s to %s on datastore %s of vCenter %s... ",
+	fmt.Fprintf(os.Stdout, "Uploading %s to %s on datastore %s of vCenter %s... ",
 		localPath, DATASTORE_DIR, conn.cfg.VcenterDS, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 
 	dsPath := fmt.Sprintf("%s/%s", DATASTORE_DIR, DATASTORE_ISO_NAME)
 	args := []string{"datastore.upload"}
@@ -91,10 +91,10 @@ func (conn VcConn) DatastoreUpload(localPath string) error {
 	args = append(args, dsPath)
 	_, stderr, err := govcOutErr(args...)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return errors.NewDatastoreError(conn.cfg.VcenterDC, "upload", stderr)
 	}
 }
@@ -109,11 +109,14 @@ func (conn VcConn) VmInfo(vmName string) (string, error) {
 	if strings.Contains(stdout, "Name") && stderr == "" && err == nil {
 		return stdout, nil
 	} else {
-		return "", errors.NewVmError("find", vmName, stderr)
+		return "", errors.NewVmError("find", vmName, "VM not found")
 	}
 }
 
 func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
+	fmt.Fprintf(os.Stdout, "Creating virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+
 	args := []string{"vm.create"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, fmt.Sprintf("--net=%s", conn.cfg.VcenterNet))
@@ -125,72 +128,69 @@ func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Creating virtual machine %s of vCenter %s... ",
-		vmName, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return errors.NewVmError("create", vmName, stderr)
 	}
 }
 
 func (conn VcConn) VmPowerOn(vmName string) error {
+	fmt.Fprintf(os.Stdout, "Powering on virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+
 	args := []string{"vm.power"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, "-on")
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Powering on virtual machine %s of vCenter %s... ",
-		vmName, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return errors.NewVmError("power on", vmName, stderr)
 	}
 }
 
 func (conn VcConn) VmPowerOff(vmName string) error {
+	fmt.Fprintf(os.Stdout, "Powering off virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+
 	args := []string{"vm.power"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, "-off")
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Powering off virtual machine %s of vCenter %s... ",
-		vmName, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return errors.NewVmError("power on", vmName, stderr)
 	}
 }
 
 func (conn VcConn) VmDestroy(vmName string) error {
+	fmt.Fprintf(os.Stdout, "Deleting virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+
 	args := []string{"vm.destroy"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, fmt.Sprintf("--dc=%s", conn.cfg.VcenterDC))
 	args = append(args, vmName)
 	_, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Deleting virtual machine %s of vCenter %s... ",
-		vmName, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return nil
 	} else {
-		fmt.Println("failed!")
-		return errors.NewVmError("power on", vmName, stderr)
+		fmt.Fprintf(os.Stderr, "failed!\n")
+		return errors.NewVmError("delete", vmName, stderr)
 	}
 
 }
@@ -210,19 +210,19 @@ func (conn VcConn) VmAttachNetwork(vmName string) error {
 }
 
 func (conn VcConn) VmFetchIp(vmName string) (string, error) {
+	fmt.Fprintf(os.Stdout, "Fetching IP on virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+
 	args := []string{"vm.ip"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, vmName)
 	stdout, stderr, err := govcOutErr(args...)
 
-	msg := fmt.Sprintf("Fetching IP on virtual machine %s of vCenter %s... ",
-		vmName, conn.cfg.VcenterIp)
-	fmt.Print(msg)
 	if stderr == "" && err == nil {
-		fmt.Println("ok!")
+		fmt.Fprintf(os.Stdout, "ok!\n")
 		return stdout, nil
 	} else {
-		fmt.Println("failed!")
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return "", errors.NewVmError("fetching IP", vmName, stderr)
 	}
 }
