@@ -175,6 +175,26 @@ func (conn VcConn) VmPowerOff(vmName string) error {
 	}
 }
 
+func (conn VcConn) VmDestroy(vmName string) error {
+	args := []string{"vm.destroy"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--dc=%s", conn.cfg.VcenterDC))
+	args = append(args, vmName)
+	_, stderr, err := govcOutErr(args...)
+
+	msg := fmt.Sprintf("Deleting virtual machine %s of vCenter %s... ",
+		vmName, conn.cfg.VcenterIp)
+	fmt.Print(msg)
+	if stderr == "" && err == nil {
+		fmt.Println("ok!")
+		return nil
+	} else {
+		fmt.Println("failed!")
+		return errors.NewVmError("power on", vmName, stderr)
+	}
+
+}
+
 func (conn VcConn) VmAttachNetwork(vmName string) error {
 	args := []string{"vm.network.add"}
 	args = conn.AppendConnectionString(args)

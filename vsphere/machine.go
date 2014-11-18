@@ -367,7 +367,16 @@ func (m *Machine) GetSSHPort() uint {
 
 // Delete deletes the machine and associated disk images.
 func (m *Machine) Delete() error {
-	fmt.Printf("Delete %s: %s\n", m.Name, m.State)
+	if m.State == driver.Running {
+		msg := fmt.Sprintf("Please poweroff machine %s before delete", m.Name)
+		fmt.Println(msg)
+		return errors.NewInvalidStateError(m.Name)
+	}
+	vcConn := NewVcConn(&cfg)
+	err := vcConn.VmDestroy(m.Name)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
