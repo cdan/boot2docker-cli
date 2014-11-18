@@ -295,16 +295,12 @@ func (m *Machine) Start() error {
 
 // Suspend suspends the machine and saves its state to disk.
 func (m *Machine) Save() error {
-	m.State = driver.Saved
-	fmt.Printf("Save %s: %s\n", m.Name, m.State)
-	return nil
+	return driver.ErrNotSupported
 }
 
 // Pause pauses the execution of the machine.
 func (m *Machine) Pause() error {
-	m.State = driver.Paused
-	fmt.Printf("Pause %s: %s\n", m.Name, m.State)
-	return nil
+	return driver.ErrNotSupported
 }
 
 // Currently make stop equivalent to poweroff as there is no shutdown guestOS API
@@ -345,9 +341,7 @@ func (m *Machine) Restart() error {
 
 // Reset forcefully restarts the machine. State is lost and might corrupt the disk image.
 func (m *Machine) Reset() error {
-	m.State = driver.Running
-	fmt.Printf("Reset %s: %s\n", m.Name, m.State)
-	return nil
+	return m.Restart()
 }
 
 // Get current name
