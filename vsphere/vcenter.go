@@ -106,7 +106,7 @@ func (conn VcConn) VmInfo(vmName string) (string, error) {
 	args = append(args, vmName)
 
 	stdout, stderr, err := govcOutErr(args...)
-	if stderr == "" && err == nil {
+	if strings.Contains(stdout, "Name") && stderr == "" && err == nil {
 		return stdout, nil
 	} else {
 		return "", errors.NewVmError("info", vmName, stderr)
@@ -172,6 +172,20 @@ func (conn VcConn) VmPowerOff(vmName string) error {
 	} else {
 		fmt.Println("failed!")
 		return errors.NewVmError("power on", vmName, stderr)
+	}
+}
+
+func (conn VcConn) VmAttachNetwork(vmName string) error {
+	args := []string{"vm.network.add"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--vm=%s", vmName))
+	args = append(args, fmt.Sprintf("--net=%s", conn.cfg.VcenterNet))
+	_, stderr, err := govcOutErr(args...)
+
+	if stderr == "" && err == nil {
+		return nil
+	} else {
+		return errors.NewVmError("add network", vmName, stderr)
 	}
 }
 

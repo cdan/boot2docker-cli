@@ -125,6 +125,11 @@ func CreateMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return nil, err
 	}
 
+	err = vcConn.VmAttachNetwork(mc.VM)
+	if err != nil {
+		return nil, err
+	}
+
 	cpu, err := strconv.ParseUint(cfg.Cpu, 10, 32)
 	if err != nil {
 		return nil, err
@@ -156,7 +161,7 @@ func ParseVmProperty(stdout string, m *Machine) {
 	}
 	if strings.Contains(stdout, "poweredOn") {
 		m.State = driver.Running
-		m.VmIp = strings.Trim(strings.Split(stdout, "IP address:")[1], " ")
+		m.VmIp = strings.Trim(strings.Trim(strings.Split(stdout, "IP address:")[1], " "), "\n")
 	}
 }
 
@@ -333,6 +338,11 @@ func (m *Machine) Reset() error {
 // Get current name
 func (m *Machine) GetName() string {
 	return m.Name
+}
+
+// Get machine address
+func (m *Machine) GetAddr() string {
+	return m.VmIp
 }
 
 // Get current state
