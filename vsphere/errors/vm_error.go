@@ -18,5 +18,5 @@ func NewVmError(vm, operation, reason string) error {
 }
 
 func (err *VmError) Error() string {
-	return fmt.Sprintf("Unable to %s virtual machine %s due to %s", err.operation, err.vm, err.reason)
+	return fmt.Sprintf("Unable to %s docker host %s due to %s", err.operation, err.vm, err.reason)
 }

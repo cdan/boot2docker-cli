@@ -109,7 +109,7 @@ func (conn VcConn) VmInfo(vmName string) (string, error) {
 	if strings.Contains(stdout, "Name") && stderr == "" && err == nil {
 		return stdout, nil
 	} else {
-		return "", errors.NewVmError("info", vmName, stderr)
+		return "", errors.NewVmError("find", vmName, stderr)
 	}
 }
 
