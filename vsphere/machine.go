@@ -90,6 +90,8 @@ func GetMachine(mc *driver.MachineConfig) (*Machine, error) {
 		SshPubKey:   mc.SSHKey + ".pub",
 		VcenterIp:   cfg.VcenterIp,
 		VcenterUser: cfg.VcenterUser,
+		Datacenter:  cfg.VcenterDC,
+		Network:     cfg.VcenterNet,
 	}
 
 	ParseVmProperty(stdout, m)
@@ -142,7 +144,6 @@ func CreateMachine(mc *driver.MachineConfig) (*Machine, error) {
 		Memory:      mc.Memory,
 		VcenterIp:   cfg.VcenterIp,
 		VcenterUser: cfg.VcenterUser,
-		Datastore:   cfg.VcenterDS,
 		Datacenter:  cfg.VcenterDC,
 		Network:     cfg.VcenterNet,
 		SshPubKey:   mc.SSHKey + ".pub",
@@ -229,7 +230,6 @@ type Machine struct {
 	Memory      uint
 	VcenterIp   string // the vcenter the machine belongs to
 	VcenterUser string // the vcenter user/admin to own the machine
-	Datastore   string // the datastore for the ISO file
 	Datacenter  string // the datacenter the machine locates
 	Network     string // the network the machine is using
 	VmIp        string // the Ip address of the machine
