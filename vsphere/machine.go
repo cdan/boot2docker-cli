@@ -275,15 +275,20 @@ func (m *Machine) Start() error {
 		if err != nil {
 			return err
 		}
+
+		fmt.Fprintf(os.Stdout, "Configuring virtual machine %s... ", m.Name)
 		err = vcConn.GuestMkdir("docker", "tcuser", m.Name, "/home/docker/.ssh")
 		if err != nil {
+			fmt.Fprintf(os.Stdout, "failed!\n")
 			return err
 		}
 		err = vcConn.GuestUpload("docker", "tcuser", m.Name, m.SshPubKey,
 			"/home/docker/.ssh/authorized_keys")
 		if err != nil {
+			fmt.Fprintf(os.Stdout, "failed!\n")
 			return err
 		}
+		fmt.Fprintf(os.Stdout, "ok!\n")
 	}
 	return nil
 }
@@ -327,9 +332,15 @@ func (m *Machine) Poweroff() error {
 
 // Restart gracefully restarts the machine.
 func (m *Machine) Restart() error {
-	m.State = driver.Running
-	fmt.Printf("Restart %s: %s\n", m.Name, m.State)
-	return nil
+	switch m.State {
+	case driver.Running:
+		if err := m.Stop(); err != nil {
+			return err
+		}
+	case driver.Poweroff:
+		fmt.Fprintf(os.Stdout, "Machine %s already stopped, starting it... \n", m.Name)
+	}
+	return m.Start()
 }
 
 // Reset forcefully restarts the machine. State is lost and might corrupt the disk image.
