@@ -124,6 +124,7 @@ func (conn VcConn) VmCreate(isoPath, memory, vmName string) error {
 	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
 	args = append(args, fmt.Sprintf("--iso=%s", isoPath))
 	args = append(args, fmt.Sprintf("--m=%s", memory))
+	args = append(args, "--disk.controller=scsi")
 	args = append(args, "--on=false")
 	if conn.cfg.VcenterPool != "" {
 		args = append(args, fmt.Sprintf("--pool=%s", conn.cfg.VcenterPool))
@@ -201,13 +202,29 @@ func (conn VcConn) VmDestroy(vmName string) error {
 
 }
 
+func (conn VcConn) VmDiskCreate(vmName, diskSize string) error {
+	args := []string{"vm.disk.create"}
+	args = conn.AppendConnectionString(args)
+	args = append(args, fmt.Sprintf("--vm=%s", vmName))
+	args = append(args, fmt.Sprintf("--ds=%s", conn.cfg.VcenterDS))
+	args = append(args, fmt.Sprintf("--name=%s", vmName))
+	args = append(args, fmt.Sprintf("--size=%sMiB", diskSize))
+
+	_, stderr, err := govcOutErr(args...)
+	if stderr == "" && err == nil {
+		return nil
+	} else {
+		return errors.NewVmError("add network", vmName, stderr)
+	}
+}
+
 func (conn VcConn) VmAttachNetwork(vmName string) error {
 	args := []string{"vm.network.add"}
 	args = conn.AppendConnectionString(args)
 	args = append(args, fmt.Sprintf("--vm=%s", vmName))
 	args = append(args, fmt.Sprintf("--net=%s", conn.cfg.VcenterNet))
-	_, stderr, err := govcOutErr(args...)
 
+	_, stderr, err := govcOutErr(args...)
 	if stderr == "" && err == nil {
 		return nil
 	} else {

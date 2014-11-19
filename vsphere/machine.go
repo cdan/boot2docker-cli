@@ -135,11 +135,21 @@ func CreateMachine(mc *driver.MachineConfig) (*Machine, error) {
 		return nil, err
 	}
 
-	err = vcConn.VmAttachNetwork(mc.VM)
+	fmt.Fprintf(os.Stdout, "Configuring the virtual machine %s... ", mc.VM)
+	diskSize := strconv.Itoa(int(mc.DiskSize))
+	err = vcConn.VmDiskCreate(mc.VM, diskSize)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed!\n")
 		return nil, err
 	}
 
+	err = vcConn.VmAttachNetwork(mc.VM)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed!\n")
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stdout, "ok!\n")
 	cpu, err := strconv.ParseUint(cfg.Cpu, 10, 32)
 	if err != nil {
 		return nil, err
