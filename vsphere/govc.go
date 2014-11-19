@@ -2,21 +2,23 @@ package vsphere
 
 import (
 	"bytes"
-	"errors"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/boot2docker/boot2docker-cli/vsphere/errors"
 )
 
 func init() {
 }
 
-var (
-	ErrGOVCNotFound = errors.New("govc not found")
-)
-
 func govc(args ...string) error {
+	err := lookPath(cfg.Govc)
+	if err != nil {
+		return errors.NewGovcNotFoundError(cfg.Govc)
+	}
+
 	cmd := exec.Command(cfg.Govc, args...)
 	if verbose {
 		cmd.Stdout = os.Stdout
@@ -24,15 +26,17 @@ func govc(args ...string) error {
 		log.Printf("executing: %v %v", cfg.Govc, strings.Join(args, " "))
 	}
 	if err := cmd.Run(); err != nil {
-		if ee, ok := err.(*exec.Error); ok && ee == exec.ErrNotFound {
-			return ErrGOVCNotFound
-		}
 		return err
 	}
 	return nil
 }
 
 func govcOutErr(args ...string) (string, string, error) {
+	err := lookPath(cfg.Govc)
+	if err != nil {
+		return "", "", errors.NewGovcNotFoundError(cfg.Govc)
+	}
+
 	cmd := exec.Command(cfg.Govc, args...)
 	if verbose {
 		log.Printf("executing: %v %v", cfg.Govc, strings.Join(args, " "))
@@ -41,11 +45,11 @@ func govcOutErr(args ...string) (string, string, error) {
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		if ee, ok := err.(*exec.Error); ok && ee == exec.ErrNotFound {
-			err = ErrGOVCNotFound
-		}
-	}
+	err = cmd.Run()
 	return stdout.String(), stderr.String(), err
+}
+
+func lookPath(file string) error {
+	_, err := exec.LookPath(file)
+	return err
 }

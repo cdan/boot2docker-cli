@@ -50,6 +50,10 @@ func InitFunc(mc *driver.MachineConfig) (driver.Machine, error) {
 	verbose = mc.Verbose
 
 	m, err := GetMachine(mc)
+	if _, ok := err.(*errors.GovcNotFoundError); ok {
+		return nil, err
+	}
+
 	if err != nil && mc.Init == true {
 		return CreateMachine(mc)
 	}
@@ -236,6 +240,12 @@ func GetDriverCfg(mc *driver.MachineConfig) error {
 		if err != nil {
 			return errors.NewIncompleteVcConfigError("VmCPU")
 		}
+	}
+
+	// govc path information are optional as user may want to use the default
+	govc := mc.DriverCfg["vsphere"].(map[string]interface{})["Govc"]
+	if govc != nil {
+		cfg.Govc = govc.(string)
 	}
 
 	// vcenter resource pool and host ip are nullable configurations

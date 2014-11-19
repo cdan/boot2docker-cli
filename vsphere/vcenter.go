@@ -26,6 +26,9 @@ func (conn VcConn) Login() error {
 	if err == nil {
 		return nil
 	}
+	if _, ok := err.(*errors.GovcNotFoundError); ok {
+		return err
+	}
 
 	fmt.Fprintf(os.Stdout, "Enter vCenter Password: ")
 	password := gopass.GetPasswd()
@@ -296,9 +299,12 @@ func (conn VcConn) AppendConnectionString(args []string) []string {
 func (conn VcConn) queryAboutInfo() error {
 	args := []string{"about"}
 	args = conn.AppendConnectionString(args)
-	stdout, _, _ := govcOutErr(args...)
+	stdout, _, err := govcOutErr(args...)
 	if strings.Contains(stdout, "Name") {
 		return nil
+	}
+	if _, ok := err.(*errors.GovcNotFoundError); ok {
+		return err
 	}
 	return errors.NewInvalidLoginError()
 }
